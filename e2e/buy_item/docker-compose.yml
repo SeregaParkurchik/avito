@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  db_test:
+    image: postgres:13
+    container_name: postgres_test
+    environment:
+      POSTGRES_USER: postgres_test
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: shop_test
+    volumes:
+      # "./migrations/init.sql" - путь к миграциям БД
+      - ./init_test.sql:/docker-entrypoint-initdb.d/init_test.sql
+    ports:
+      - "5431:5432"  # Порт для подключения к тестовой БД
+    healthcheck:
+      test: ["CMD-SHELL", "sh -c 'pg_isready -U postgres_test -d shop_test'"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+    networks:
+      - internal
+
+networks:
+  internal:
