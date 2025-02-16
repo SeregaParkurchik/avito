@@ -1,4 +1,4 @@
-.PHONY: all up send_coin_test buy_item_test down
+.PHONY: all up send_coin_test buy_item_test
 
 # Убедитесь, что у вас есть docker-compose и go
 
@@ -8,13 +8,13 @@ all: up
 up:
 	docker-compose up
 
-# Запуск e2e теста для send_coin (поднимает базу данных)
+# Запуск e2e теста для send_coin
 send_coin_test:
-	cd e2e/send_coin && docker-compose up -d db && go test
+	cd e2e/send_coin && docker-compose up -d && go test
 
-# Запуск e2e теста для buy_item (поднимает базу данных)
+# Запуск e2e теста для buy_item
 buy_item_test:
-	cd e2e/buy_item && docker-compose up -d db && go test
+	cd e2e/buy_item && docker-compose up -d && go test
 
 # Остановка всех контейнеров
 down:
