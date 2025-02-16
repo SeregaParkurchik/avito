@@ -37,7 +37,7 @@ func main() {
 	mux := routes.InitRoutes(userHandler)
 
 	corsHandler := gorillaHandlers.CORS(
-		gorillaHandlers.AllowedOrigins([]string{"*"}), // Разрешить все домены, но лучше указать конкретные
+		gorillaHandlers.AllowedOrigins([]string{"*"}),
 		gorillaHandlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}),
 		gorillaHandlers.AllowedHeaders([]string{"Content-Type", "Authorization"}),
 	)

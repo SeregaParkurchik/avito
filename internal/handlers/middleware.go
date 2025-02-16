@@ -51,8 +51,3 @@ func (h *UserHandler) AuthMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
-
-// func GetUsername(ctx context.Context) (string, bool) {
-// 	return "nil", true
-// 	//r.Context().Value(usernameKey).(string)
-// }

@@ -104,12 +104,12 @@ func Test_Valid(t *testing.T) {
 	testCases := []testCase{
 		{
 			name:        "ValidToken",
-			claims:      TokenClaims{EXP: currentTime + 3600}, // Токен действителен на 1 час вперед
+			claims:      TokenClaims{EXP: currentTime + 3600},
 			expectError: false,
 		},
 		{
 			name:          "ExpiredToken",
-			claims:        TokenClaims{EXP: currentTime - 1}, // Токен истек
+			claims:        TokenClaims{EXP: currentTime - 1},
 			expectError:   true,
 			expectedError: "токен истек",
 		},
