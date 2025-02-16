@@ -1,7 +1,9 @@
-package buyitem
+package sendcoin
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -31,9 +33,9 @@ var (
 func setupTestDB() (*storage.AvitoDB, *pgx.Conn, func()) {
 	cfg := storage.PostgresConnConfig{
 		DBHost:   "localhost",
-		DBPort:   5430,
+		DBPort:   5429,
 		DBName:   "shop_test",
-		Username: "postgres_test1",
+		Username: "postgres_test",
 		Password: "password",
 		Options:  nil,
 	}
@@ -56,7 +58,7 @@ func setupTestDB() (*storage.AvitoDB, *pgx.Conn, func()) {
 	)
 
 	server = &http.Server{
-		Addr:    ":8081",
+		Addr:    ":8082",
 		Handler: corsHandler(mux),
 	}
 
@@ -64,7 +66,7 @@ func setupTestDB() (*storage.AvitoDB, *pgx.Conn, func()) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		fmt.Println("Запуск сервера на порту 8081 http://localhost:8081/")
+		fmt.Println("Запуск сервера на порту 8082 http://localhost:8082/")
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Ошибка при запуске сервера: %v", err)
 		}
@@ -105,14 +107,13 @@ func addUser(employee *models.Employee, conn *pgx.Conn) error {
 		return fmt.Errorf("ошибка при регистрации пользователя: %w", err)
 	}
 	return nil
-
 }
 
 func deleteTestData(conn *pgx.Conn) error {
-	// Удаляем данные из таблицы inventory
-	_, err := conn.Exec(context.Background(), "DELETE FROM inventory")
+	// Удаляем данные из таблицы transactions
+	_, err := conn.Exec(context.Background(), "DELETE FROM transactions")
 	if err != nil {
-		return fmt.Errorf("ошибка при удалении данных из таблицы inventory: %w", err)
+		return fmt.Errorf("ошибка при удалении данных из таблицы transactions: %w", err)
 	}
 
 	// Удаляем данные из таблицы employees
@@ -124,35 +125,49 @@ func deleteTestData(conn *pgx.Conn) error {
 	return nil
 }
 
-func updateCoins(id int, conn *pgx.Conn) error {
-	_, err := conn.Exec(context.Background(), "UPDATE employees SET coins = $1 WHERE id = $2", 0, id)
-	if err != nil {
-		return fmt.Errorf("ошибка при обновлении данных в таблице employees: %w", err)
+func createRequest(toUser string, amount int, token string) (*http.Request, error) {
+	url := "http://localhost:8082/api/sendCoin"
+	data := struct {
+		ToUser string `json:"toUser"`
+		Amount int    `json:"amount"`
+	}{
+		ToUser: toUser,
+		Amount: amount,
 	}
 
-	return nil
-}
+	// Преобразуем структуру в JSON
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return nil, fmt.Errorf("не удалось преобразовать данные в JSON: %w", err)
+	}
 
-func createRequest(item string, token string) (*http.Request, error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("http://localhost:8081/api/buy/%s", item), nil)
+	// Создаем новый POST-запрос
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, fmt.Errorf("не удалось создать запрос: %w", err)
 	}
+
+	// Устанавливаем заголовки
 	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "*/*")
+
 	return req, nil
 }
 
-func Test_E2E_BuyItem_Success(t *testing.T) {
+func Test_E2E_SendCoin_Success(t *testing.T) {
 	// Запустили тестовый сервер и дб
 	_, conn, teardown := setupTestDB()
 	defer teardown()
 
-	// Добавили тестового пользователя
-	employee := &models.Employee{Username: "user1", Password: "password"}
-	addUser(employee, conn)
+	// Добавили тестовых пользователей
+	employee1 := &models.Employee{Username: "serega", Password: "password1"}
+	addUser(employee1, conn)
+	employee2 := &models.Employee{Username: "serega2", Password: "password2"}
+	addUser(employee2, conn)
 
 	// Создаем GET-запрос на покупку товара
-	req, err := createRequest("pen", employee.Token)
+	req, err := createRequest(employee2.Username, 50, employee1.Token) // user1 -> user2
 	require.NoError(t, err, "не удалось создать запрос")
 
 	// Создаем сервер
@@ -168,16 +183,19 @@ func Test_E2E_BuyItem_Success(t *testing.T) {
 	require.NoError(t, err, "не удалось удалить тестовые данные")
 }
 
-func Test_E2E_BuyItem_No_Item(t *testing.T) {
+func Test_E2E_SendCoin_Bad_Balance(t *testing.T) {
 	// Запустили тестовый сервер и дб
 	_, conn, teardown := setupTestDB()
 	defer teardown()
 
-	// Добавили тестового пользователя
-	employee := &models.Employee{Username: "user1", Password: "password"}
-	addUser(employee, conn)
+	// Добавили тестовых пользователей
+	employee1 := &models.Employee{Username: "serega", Password: "password1"}
+	addUser(employee1, conn)
+	employee2 := &models.Employee{Username: "dima", Password: "password2"}
+	addUser(employee2, conn)
+
 	// Создаем GET-запрос на покупку товара
-	req, err := createRequest("car", employee.Token)
+	req, err := createRequest(employee2.Username, 1001, employee1.Token) // user1 -> user2
 	require.NoError(t, err, "не удалось создать запрос")
 
 	// Создаем сервер
@@ -193,18 +211,19 @@ func Test_E2E_BuyItem_No_Item(t *testing.T) {
 	require.NoError(t, err, "не удалось удалить тестовые данные")
 }
 
-func Test_E2E_BuyItem_No_Balance(t *testing.T) {
+func Test_E2E_SendCoin_No_Recipient(t *testing.T) {
 	// Запустили тестовый сервер и дб
 	_, conn, teardown := setupTestDB()
 	defer teardown()
 
-	// Добавили тестового пользователя
-	employee := &models.Employee{Username: "user1", Password: "password"}
-	addUser(employee, conn)
-	updateCoins(employee.ID, conn)
+	// Добавили тестовых пользователей
+	employee1 := &models.Employee{Username: "serega", Password: "password1"}
+	addUser(employee1, conn)
+	employee2 := &models.Employee{Username: "dima", Password: "password2"}
+	addUser(employee2, conn)
 
 	// Создаем GET-запрос на покупку товара
-	req, err := createRequest("pink-hoody", employee.Token)
+	req, err := createRequest("user2", 1001, employee1.Token) // user1 -> user2
 	require.NoError(t, err, "не удалось создать запрос")
 
 	// Создаем сервер
